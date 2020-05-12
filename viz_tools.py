@@ -4,6 +4,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import animation
 import os, sys
+from mpl_toolkits.mplot3d import axes3d
+from matplotlib import cm
+
 
 
 # MPEG codec path
@@ -35,6 +38,30 @@ def u_animation(x , u_anim):
         return line1,
 
     anim = animation.FuncAnimation(fig, update, init_func=init, frames=len(u_anim), interval=1.2, blit=True) 
+
+    mpeg_writer = animation.FFMpegWriter(fps = 24, bitrate = 10000, codec = "libx264", extra_args = ["-pix_fmt", "yuv420p"])
+
+    anim.save('final.mp4', writer=mpeg_writer)
+
+    return anim
+
+def u_2d_animation(x, y, u_anim):
+
+    fig = plt.figure()
+    ax  = fig.gca(projection='3d')
+    plt.xlabel("x [m]",   fontname = "serif", fontsize = 10)
+    plt.ylabel("y [m]", fontname = "serif", fontsize = 10)
+    X, Y = np.meshgrid(x, y) 
+    surf2 = ax.plot_surface(X, Y, u_anim[0][:][:], cmap=cm.viridis)  
+
+
+    def update(t):
+        ax.clear()
+        ax.set_title(str("t_step = " + str(t)), fontname = "serif", fontsize = 12)
+        surf2 = ax.plot_surface(X, Y, u_anim[t][:][:], cmap=cm.viridis)  
+        return surf2,
+
+    anim = animation.FuncAnimation(fig, update, frames=len(u_anim), interval=1.2, blit=True) 
 
     mpeg_writer = animation.FFMpegWriter(fps = 24, bitrate = 10000, codec = "libx264", extra_args = ["-pix_fmt", "yuv420p"])
 
