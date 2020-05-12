@@ -6,7 +6,7 @@ from matplotlib import animation
 import os, sys
 
 
-# MPEG code path
+# MPEG codec path
 
 ff_path = os.path.join('C:/', 'Program Files (x86)/ffmpeg/bin/', 'ffmpeg.exe')
 plt.rcParams['animation.ffmpeg_path'] = ff_path
@@ -16,7 +16,7 @@ plt.style.use('seaborn-pastel')
 def u_animation(x , u_anim):
 
     fig, ax = plt.subplots(1, 1)
-    ax = plt.axes(xlim=(0, 2), ylim=(0, 2)) 
+    ax = plt.axes(xlim=(0, 7), ylim=(0, 10)) 
     plt.xlabel("x [m]",   fontname = "serif", fontsize = 10)
     plt.ylabel("u [m/s]", fontname = "serif", fontsize = 10)
     line1, = ax.plot([], [], lw=2)  
