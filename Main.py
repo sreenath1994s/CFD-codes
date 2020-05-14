@@ -1,4 +1,4 @@
-######## 2D Non - Linear Convection #######
+######## 2D Burger's #######
 
 ### Reference https://lorenabarba.com/blog/cfd-python-12-steps-to-navier-stokes/
 
@@ -8,7 +8,10 @@ import matplotlib.pyplot as plt
 import viz_tools, custom
 from mpl_toolkits.mplot3d import axes3d
 from matplotlib import cm
-from numba import jit
+#from numba import jit
+import time
+
+run_start_time = time.time()                          # Variable used for evaluating program execution time 
 
 # Domain Parameters and Physical Properties
 
@@ -16,17 +19,17 @@ L_x = 2             # Length of the domain in x - direction
 
 L_y = 2             # Length of the domain in y - direction
 
-nu  = .07           # Viscocity
+nu  = .01           # Viscocity
 
 c  = 1              # Wave speed
 
-sigma = 0.2
+sigma = 0.0009
 
 # Grid - Computational parameters
 
-N_x = 101                      # No: of grid points in x
+N_x = 41                       # No: of grid points in x
 
-N_y = 101                      # No: of grid points in y
+N_y = 41                       # No: of grid points in y
 
 dx = L_x / (N_x - 1)           # Spacing between grid points
 
@@ -38,9 +41,9 @@ y  = np.linspace(0, L_y, N_y)  # Array with x points
 
 tf = 3                         # Stopping time in seconds
                                
-dt = dx*sigma                  # Time interval of each time step
+dt = dx*sigma * dy / nu        # Time interval of each time step
 
-nt = int(tf/dt)                # No: of time steps
+nt = 120                       # No: of time steps
 
                                
 # Intial condition setup
@@ -51,9 +54,9 @@ u1 =  np.ones((N_x, N_y))
 
 v1 =  np.ones((N_x, N_y))
 
-u1[int(.5 / dy):int(1 / dy + 1),int(.5 / dx):int(1 / dx + 1)] = 2.0     # Initial solution
+u1[int(.5 / dx):int(1 / dx + 1),int(.5 / dy):int(1 / dy + 1)] = 2.0     # Initial solution
 
-v1[int(.5 / dy):int(1 / dy + 1),int(.5 / dx):int(1 / dx + 1)] = 2.0     # Initial solution
+v1[int(.5 / dx):int(1 / dx + 1),int(.5 / dy):int(1 / dy + 1)] = 2.0     # Initial solution
 
 
 fig = plt.figure()
@@ -68,7 +71,7 @@ u2 = np.ones((N_x, N_y))
 
 v2 = np.ones((N_x, N_y))
 
-@jit(nopython=True, cache=True)
+#@jit(nopython=True, cache=True)
 
 def solver(u1,u2,v1,v2,dt,dx,dy,u_anim,nt):
 
@@ -82,9 +85,13 @@ def solver(u1,u2,v1,v2,dt,dx,dy,u_anim,nt):
         #   
         #        u_anim[t][i][j] = u1[i,j]
         
-        u2[1:,1:] = u1[1:,1:] - u1[1:,1:] * dt / dx * (u1[1:,1:] - u1[:-1,1:]) - v1[1:,1:] * dt / dy * (v1[1:,1:] - v1[1:,:-1])  # 2D  Non - Linear Convection equation
+        u2[1:-1,1:-1] = u1[1:-1,1:-1] \
+                        - u1[1:-1,1:-1] * dt / dx * (u1[1:-1,1:-1] - u1[0:-2,1:-1]) - v1[1:-1,1:-1] * dt / dy * (u1[1:-1,1:-1] - u1[1:-1,0:-2]) \
+                        + nu * dt / (dx**2) * (u1[2:,1:-1] - 2*u1[1:-1,1:-1] + u1[0:-2,1:-1]) + nu * dt / (dy**2) * (u1[1:-1,2:] - 2*u1[1:-1,1:-1] + u1[1:-1,0:-2]) # 2D  Non - Linear Convection equation
     
-        v2[1:,1:] = v1[1:,1:] - u1[1:,1:] * dt / dx * (u1[1:,1:] - u1[:-1,1:]) - v1[1:,1:] * dt / dy * (v1[1:,1:] - v1[1:,:-1])  # 2D  Non - Linear Convection equation
+        v2[1:-1,1:-1] = v1[1:-1,1:-1] \
+                        - v1[1:-1,1:-1] * dt / dx * (v1[1:-1,1:-1] - v1[0:-2,1:-1]) - v1[1:-1,1:-1] * dt / dy * (v1[1:-1,1:-1] - v1[1:-1,0:-2]) \
+                        + nu * dt / (dx**2) * (v1[2:,1:-1] - 2*v1[1:-1,1:-1] + v1[0:-2,1:-1]) + nu * dt / (dy**2) * (v1[1:-1,2:] - 2*v1[1:-1,1:-1] + v1[1:-1,0:-2])
     
         # u2[1:,1:] = u1[1:,1:] - c * dt / dx * (u1[1:,1:] - u1[:-1,1:]) - c * dt / dy * (u1[1:,1:] - u1[1:,:-1])  # 2D Convection equation optimised version
     
@@ -110,8 +117,10 @@ solver(u1,u2,v1,v2,dt,dx,dy,u_anim,nt)
 
 print( "Simulation Finished.. Visualizing data")
 
+print("\n Simulation time is --- %s seconds ---" % (time.time() - run_start_time))
+
 #eta_anim = viz_tools.u_animation(x, u_anim)
-viz_tools.u_2d_animation(x, y, u_anim, dt)
+#viz_tools.u_2d_animation(x, y, u_anim, dt)
 
 fig = plt.figure()
 ax  = fig.gca(projection='3d')
