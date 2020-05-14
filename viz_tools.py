@@ -1,4 +1,4 @@
-##### Animation routine #####
+##### Animation Subroutines #####
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -15,6 +15,8 @@ ff_path = os.path.join('C:/', 'Program Files (x86)/ffmpeg/bin/', 'ffmpeg.exe')
 plt.rcParams['animation.ffmpeg_path'] = ff_path
 if ff_path not in sys.path: sys.path.append(ff_path)
 plt.style.use('seaborn-pastel')
+
+# 2D Animation
 
 def u_animation(x , u_anim):
 
@@ -37,15 +39,17 @@ def u_animation(x , u_anim):
         line1.set_data(x_out, u_out)
         return line1,
 
-    anim = animation.FuncAnimation(fig, update, init_func=init, frames=len(u_anim), interval=1.2, blit=True) 
+    anim = animation.FuncAnimation(fig, update, init_func=init, frames=len(u_anim), blit=True) 
 
     mpeg_writer = animation.FFMpegWriter(fps = 24, bitrate = 10000, codec = "libx264", extra_args = ["-pix_fmt", "yuv420p"])
 
     anim.save('final.mp4', writer=mpeg_writer)
 
-    return anim
+    return 
 
-def u_2d_animation(x, y, u_anim):
+# 3D Animation
+
+def u_2d_animation(x, y, u_anim, dt):
 
     fig = plt.figure()
     ax  = fig.gca(projection='3d')
@@ -61,10 +65,10 @@ def u_2d_animation(x, y, u_anim):
         surf2 = ax.plot_surface(X, Y, u_anim[t][:][:], cmap=cm.viridis)  
         return surf2,
 
-    anim = animation.FuncAnimation(fig, update, frames=len(u_anim), interval=1.2, blit=True) 
+    anim = animation.FuncAnimation(fig, update, frames=len(u_anim), blit=True) 
 
     mpeg_writer = animation.FFMpegWriter(fps = 24, bitrate = 10000, codec = "libx264", extra_args = ["-pix_fmt", "yuv420p"])
 
     anim.save('final.mp4', writer=mpeg_writer)
 
-    return anim
+    return 
