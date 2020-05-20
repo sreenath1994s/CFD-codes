@@ -1,4 +1,4 @@
-######## 2D Burger's #######
+######## 2D Laplace Equation #######
 
 ### Reference https://lorenabarba.com/blog/cfd-python-12-steps-to-navier-stokes/
 
@@ -6,8 +6,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import viz_tools, custom
-from mpl_toolkits.mplot3d import axes3d
-from matplotlib import cm
+
 #from numba import jit
 import time
 
@@ -17,7 +16,7 @@ run_start_time = time.time()                          # Variable used for evalua
 
 L_x = 2             # Length of the domain in x - direction
 
-L_y = 2             # Length of the domain in y - direction
+L_y = 1             # Length of the domain in y - direction
 
 nu  = .01           # Viscocity
 
@@ -27,9 +26,9 @@ sigma = 0.0009
 
 # Grid - Computational parameters
 
-N_x = 41                       # No: of grid points in x
+N_x = 31                       # No: of grid points in x
 
-N_y = 41                       # No: of grid points in y
+N_y = 31                       # No: of grid points in y
 
 dx = L_x / (N_x - 1)           # Spacing between grid points
 
@@ -58,12 +57,14 @@ u1[int(.5 / dx):int(1 / dx + 1),int(.5 / dy):int(1 / dy + 1)] = 2.0     # Initia
 
 v1[int(.5 / dx):int(1 / dx + 1),int(.5 / dy):int(1 / dy + 1)] = 2.0     # Initial solution
 
+p1 = np.zeros((N_x, N_y))
 
-fig = plt.figure()
-ax  = fig.gca(projection='3d')
-X, Y = np.meshgrid(x, y)                            
-surf = ax.plot_surface(X, Y, u1[:], cmap=cm.viridis)
-plt.show()
+p1[0  , :] = 0.0       # p = 0 at x = 0
+p1[-1 , :] = y         # p = 2 at x = 2
+p1[:  , 0] = p1[: , 1] # dp/dy = 0 at y = 0
+p1[:  ,-1] = p1[: ,-2] # dp/dy = 0 at y = 1
+
+viz_tools.surface_2d(x, y, p1, "P_initial")
 
 # Solver 
 
@@ -72,6 +73,30 @@ u2 = np.ones((N_x, N_y))
 v2 = np.ones((N_x, N_y))
 
 #@jit(nopython=True, cache=True)
+
+
+def laplace2d(p1, y, dx, dy, l1norm_target):
+
+    l1norm = 1
+    p2 = np.zeros((N_x, N_y))
+
+    while l1norm > l1norm_target:
+        p2[1:-1, 1:-1] = ( dy**2 * (p1[2:, 1:-1] + p1[0:-2, 1:-1]) + dx**2 * (p1[1:-1, 2:] + p1[1:-1, 0:-2])  ) / (2 * (dx**2 + dy**2))
+
+        p2[0  , :] = 0.0       # p = 0 at x = 0
+        p2[-1 , :] = y       # p = 2 at x = 2
+        p2[:  , 0] = p1[: , 1] # dp/dy = 0 at y = 0
+        p2[:  ,-1] = p1[: ,-2] # dp/dy = 0 at y = 1
+        
+        l1norm = (np.sum(np.abs(p2) - np.abs(p1)) / np.sum(np.abs(p1)))
+
+        p1 = p2.copy()
+
+    return p1
+
+p1 = laplace2d(p1, y, dx, dy, 1e-8)
+
+viz_tools.surface_2d(x, y, p1, "P_final")
 
 def solver(u1,u2,v1,v2,dt,dx,dy,u_anim,nt):
 
@@ -113,19 +138,14 @@ def solver(u1,u2,v1,v2,dt,dx,dy,u_anim,nt):
 
     return u1,u2,v1,v2,dt,dx,dy,u_anim
 
-solver(u1,u2,v1,v2,dt,dx,dy,u_anim,nt)  
+#u1,u2,v1,v2,dt,dx,dy,u_anim = solver(u1,u2,v1,v2,dt,dx,dy,u_anim,nt)  
 
 print( "Simulation Finished.. Visualizing data")
 
 print("\n Simulation time is --- %s seconds ---" % (time.time() - run_start_time))
 
-#eta_anim = viz_tools.u_animation(x, u_anim)
-#viz_tools.u_2d_animation(x, y, u_anim, dt)
+viz_tools.animation_3d(x, y, u_anim, dt)
 
-fig = plt.figure()
-ax  = fig.gca(projection='3d')
-X, Y = np.meshgrid(x, y)                            
-surf = ax.plot_surface(X, Y, u1[:], cmap=cm.viridis)
-plt.show()
+viz_tools.surface_2d(x, y, u1, "fig2")
 
 print(np.sum(u1))

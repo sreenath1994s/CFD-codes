@@ -18,7 +18,7 @@ plt.style.use('seaborn-pastel')
 
 # 2D Animation
 
-def u_animation(x , u_anim):
+def animation_2d(x , u_anim):
 
     fig, ax = plt.subplots(1, 1)
     ax = plt.axes(xlim=(0, 7), ylim=(0, 10)) 
@@ -49,26 +49,42 @@ def u_animation(x , u_anim):
 
 # 3D Animation
 
-def u_2d_animation(x, y, u_anim, dt):
+def animation_3d(x, y, z, dt):
 
     fig = plt.figure()
     ax  = fig.gca(projection='3d')
     plt.xlabel("x [m]",   fontname = "serif", fontsize = 10)
     plt.ylabel("y [m]", fontname = "serif", fontsize = 10)
-    X, Y = np.meshgrid(x, y) 
-    surf2 = ax.plot_surface(X, Y, u_anim[0][:][:], cmap=cm.viridis)  
-
+    Y, X = np.meshgrid(y, x) 
+    surf2 = ax.plot_surface(X, Y, z[0][:][:], cmap=cm.viridis, linewidth=0, antialiased=False)  
+    plt.axis('off')
 
     def update(t):
         ax.clear()
         ax.set_title(str("t_step = " + str(t)), fontname = "serif", fontsize = 12)
-        surf2 = ax.plot_surface(X, Y, u_anim[t][:][:], cmap=cm.viridis)  
+        surf2 = ax.plot_surface(X, Y, z[t][:][:], cmap=cm.viridis, linewidth=0, antialiased=False) 
+        plt.axis('off')
         return surf2,
 
-    anim = animation.FuncAnimation(fig, update, frames=len(u_anim), blit=True) 
+    anim = animation.FuncAnimation(fig, update, frames=len(z), blit=True) 
 
     mpeg_writer = animation.FFMpegWriter(fps = 24, bitrate = 10000, codec = "libx264", extra_args = ["-pix_fmt", "yuv420p"])
 
     anim.save('final.mp4', writer=mpeg_writer)
 
-    return 
+    return
+
+def surface_2d(x, y, z, name):
+
+    fig = plt.figure()
+    ax  = fig.gca(projection='3d')
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    Y, X = np.meshgrid(y, x)                            
+    surf = ax.plot_surface(X, Y, z, cmap=cm.viridis, linewidth=0, antialiased=True)
+    plt.savefig(str(str(name) + ".png"))
+    plt.show()
+    ax.clear()
+
+    return
+
