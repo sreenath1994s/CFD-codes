@@ -1,4 +1,4 @@
-######## 2D Laplace Equation #######
+######## Navier stokes channel flow #######
 
 ### Reference https://lorenabarba.com/blog/cfd-python-12-steps-to-navier-stokes/
 
@@ -16,19 +16,19 @@ run_start_time = time.time()                          # Variable used for evalua
 
 L_x = 2             # Length of the domain in x - direction
 
-L_y = 1             # Length of the domain in y - direction
+L_y = 2             # Length of the domain in y - direction
 
-nu  = .01           # Viscocity
+nu  = 0.1           # Viscocity
 
-c  = 1              # Wave speed
+F = 1               # Source Strength
 
-sigma = 0.0009
+rho = 1             # Density of the medium
 
 # Grid - Computational parameters
 
-N_x = 31                       # No: of grid points in x
+N_x = 41                       # No: of grid points in x
 
-N_y = 31                       # No: of grid points in y
+N_y = 41                       # No: of grid points in y
 
 dx = L_x / (N_x - 1)           # Spacing between grid points
 
@@ -40,10 +40,9 @@ y  = np.linspace(0, L_y, N_y)  # Array with x points
 
 tf = 3                         # Stopping time in seconds
                                
-dt = dx*sigma * dy / nu        # Time interval of each time step
+dt = 0.01                      # Time interval of each time step
 
-nt = 120                       # No: of time steps
-
+nt = 120                       # No: of time steps 
                                
 # Intial condition setup
 
