@@ -1,4 +1,6 @@
 ##### Animation Subroutines #####
+##### Written by Sreenath S #####
+#####  May 2020 - for FVM   #####
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -74,12 +76,12 @@ def surface_3D_gpu(x, y, z, name):
     tray2[0,:] = z[0,:] ; tray2[:,0] = z[:,0] ;  tray2[-1,:] = z[-1,:] ; tray2[:,-1] = z[:,-1]
 
     surface  = scene.visuals.SurfacePlot(x, y, z, shading='smooth', color='#289fd2')
-    #surface1 = scene.visuals.SurfacePlot(x, y, tray1, shading='smooth', color=(0.5,0.5,0.5,0.1))
+    surface1 = scene.visuals.SurfacePlot(x, y, tray1, shading='smooth', color=(0.5,0.5,0.5,0.1))
     surface2 = scene.visuals.SurfacePlot(x, y, tray2, shading='smooth', color='#289fd2')
 
     view.add(surface)
     view.add(surface2)
-    #view.add(surface1)
+    view.add(surface1)
 
     canvas.show(run=True)
 

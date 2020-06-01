@@ -9,29 +9,36 @@ from numba import jit
 
 run_start_time = time.time()                          # Variable used for evaluating program execution time 
 
-# Domain Parameters and Physical Properties
+
+####### Domain Parameters and Physical Properties #########
 
 L_x = 2             # Length of the domain in x - direction
 
 L_y = 2             # Length of the domain in y - direction
 
-g = 9.81            # Acceleration due to gravity
+g = 9.80665         # Acceleration due to gravity
 
-theta = np.radians(10)
+theta = np.radians(10)  # Angle of tilt of the tank
 
-N_x = 160            # No: of x cells
+N_x = 100           # No: of x cells
 
-N_y = 160            # No: of y cells
+N_y = 100           # No: of y cells
 
-N_g = 4              # No: of ghost cells
+N_g = 4             # No: of ghost cells
 
-Cou_Num = 0.5
+Cou_Num = 0.5       # Courant number must be less than one
 
 max_itr = 10000     # Maximum no:of iterations
+
 t_start = 0.0       # Starting time of simulation, s
+
 t_stop  = 12.0      # Stopping time of simulation, s
 
-# Data Structure - Grid Data
+RKsteps = 3         # No. of RK steps, min 1, max 3
+
+recons  = 2         # Reconstruction type 1 - 1st , 2 - 2nd ( Lax-Wendroff ), 3 - 5th (WENO)
+
+########## Data Structure - Grid Data ##########
 
 dx = L_x / (N_x)    # size of x direction cells
 
@@ -44,7 +51,8 @@ cy  = np.linspace(-N_g*dy/2, L_y + N_g*dy/2 , N_y+2*N_g)  # Centroid of Y - Cell
 CY, CX = np.meshgrid(cy, cx) 
 
 U1 =  np.zeros((3, N_x + 2*N_g, N_y + 2*N_g))   # Solution vector  U1[0,:,:] = rho*h ; U1[1,:,:] = rho*h*u ; U1[2,:,:] = rho*h*v 
-U2 =  np.zeros_like(U1)                         # Solution vector at n+1 time step
+
+U2 =  np.zeros((RKsteps+1, 3, N_x + 2*N_g, N_y + 2*N_g))    # Solution vector for different RK Steps
 
 UEast  =  np.zeros_like(U1)  # Right side of a cell
 UWest  =  np.zeros_like(U1)  # Left side of a cell
@@ -55,11 +63,12 @@ T_flux =  np.zeros_like(U1)  # Total flux inside a cell
 
 S      =  np.zeros_like(U1)  # Source term
 
-Uanim  = np.zeros((max_itr, 3, N_x + 2*N_g, N_y + 2*N_g))
+Uanim  = np.zeros((max_itr, 3, N_x + 2*N_g, N_y + 2*N_g)) # Arrays for storing animation data.
+                                                          #
+tanim  = np.zeros((max_itr))                              # 
 
-tanim  = np.zeros((max_itr))
 
-# Intial condition setup
+######## Intial condition setup ########
 
 U1[0] = 1 * np.exp(-( ( CX - 1 )**2 / (2*0.04) + (CY - 1 )**2 / (2*0.04) ) )  # Initialising the inital values of height as a gaussian.
 
@@ -67,42 +76,35 @@ U1[1] = 0.0  # Initialising the inital values of u - velocity
 
 U1[2] = 0.0  # Initialising the inital values of v - velocity
 
-#viz_tools.surface_2d(cx, cy, U1[0], "h_initial")
+#viz_tools.surface_2d(cx, cy, U1[0], "h_initial")   # Plot initial condtion
 
-# Time step calculator
+
+###### Time step calculator based on CFL Condition #####        https://en.wikipedia.org/wiki/Courant%E2%80%93Friedrichs%E2%80%93Lewy_condition
 
 @jit(nopython=True, parallel=False, cache=True)
 def time_step_calc(U1):
 
-    h = U1[0]
+    h = U1[0,N_g:N_g+N_x,N_g:N_g+N_y]
     
-    u = U1[1]/h
+    u = U1[1,N_g:N_g+N_x,N_g:N_g+N_y]/h
     
-    v = U1[2]/h
+    v = U1[2,N_g:N_g+N_x,N_g:N_g+N_y]/h
     
-    c = np.sqrt(g*h)
+    c = np.sqrt(g*h) #Inc
     
-    dtx = dx / (np.abs(u) + c)
+    dtx = dx / (np.abs(u) + c) #Inc
     
-    dty = dy / (np.abs(u) + c)
+    dty = dy / (np.abs(u) + c) #Inc
 
-    dt  = np.min( 1 / (1/dtx + 1/dty))   
+    dt  = np.min( 1.0 / (1.0/dtx + 1.0/dty))
 
     return dt*Cou_Num
 
 
-# Boundary condition application
+###### Boundary condition application #######
 
 @jit(nopython=True, parallel=False, cache=True)
 def boundary_cond(U1):
-
-    #U1[:,0:N_g,:] = U1[:,N_x:N_x+N_g,:]       # Periodic boundary condition for left and right of the boundary 
-
-    #U1[:,-N_g:,:] = U1[:,N_g:2*N_g,:]
-
-    #U1[:,:,0:N_g] = U1[:,:,N_y:N_y+N_g]       # Periodic boundary condition for bottom and top of the boundary 
-
-    #U1[:,:,-N_g:] = U1[:,:,N_g:2*N_g]
 
     # Vertical wall reflective boundary conditions
 
@@ -134,18 +136,71 @@ def boundary_cond(U1):
 
     return U1
 
-# Variable reconstructor
-@jit(nopython=True, parallel=False, cache=True)
-def variable_recon(U1, UEast, UWest, UNorth, USouth): 
+###### Variable reconstructor #######
 
-    UEast [:, N_g-1:N_x+N_g+1 ,  N_g-1:N_y+N_g+1] = U1[:, N_g-1:N_x+N_g+1 ,  N_g-1:N_y+N_g+1]      # First order reconstruction 
-    UWest [:, N_g-1:N_x+N_g+1 ,  N_g-1:N_y+N_g+1] = U1[:, N_g-1:N_x+N_g+1 ,  N_g-1:N_y+N_g+1]      
-    UNorth[:, N_g-1:N_x+N_g+1 ,  N_g-1:N_y+N_g+1] = U1[:, N_g-1:N_x+N_g+1 ,  N_g-1:N_y+N_g+1]
-    USouth[:, N_g-1:N_x+N_g+1 ,  N_g-1:N_y+N_g+1] = U1[:, N_g-1:N_x+N_g+1 ,  N_g-1:N_y+N_g+1]
+@jit(nopython=True, parallel=False, cache=True)
+def variable_recon(U1, UEast, UWest, UNorth, USouth, recons): 
+
+    # First order reconstruction 
+
+    if (recons==1):
+
+        UEast [:, N_g-1:N_x+N_g+1 ,  N_g-1:N_y+N_g+1] = U1[:, N_g-1:N_x+N_g+1 ,  N_g-1:N_y+N_g+1]     
+        UWest [:, N_g-1:N_x+N_g+1 ,  N_g-1:N_y+N_g+1] = U1[:, N_g-1:N_x+N_g+1 ,  N_g-1:N_y+N_g+1]        
+        UNorth[:, N_g-1:N_x+N_g+1 ,  N_g-1:N_y+N_g+1] = U1[:, N_g-1:N_x+N_g+1 ,  N_g-1:N_y+N_g+1]
+        USouth[:, N_g-1:N_x+N_g+1 ,  N_g-1:N_y+N_g+1] = U1[:, N_g-1:N_x+N_g+1 ,  N_g-1:N_y+N_g+1]
+    
+    # Second order reconstruction with Lax Wendroff Method and Van - Albada Limiter 1 https://en.wikipedia.org/wiki/Flux_limiter
+
+    if (recons==2):
+
+        for i in range(N_g-1, N_x+N_g+1):
+    
+            for j in range(N_g-1, N_y+N_g+1):
+
+                for var in range(3):
+
+                    # Flux Limiter calculation
+
+                    num = U1[var, i , j] - U1[var, i-1 , j]                
+                    den = U1[var, i+1, j] - U1[var, i , j]                 
+                                                                           
+                    if (np.abs(den) < 1e-40):                              
+                        phi_x = 1.0                                        
+                    else:                                                  
+                        rx = num/den                                       
+                        rx = max(0.0,rx)                                   
+                        phi_x = ( rx * rx + rx) / (rx*rx +1.0)             
+                                                                           
+                    num = U1[var, i , j] - U1[var, i , j-1]                
+                    den = U1[var, i, j+1] - U1[var, i , j]                 
+                                                                           
+                    if (np.abs(den) < 1e-40):                              
+                        phi_y = 1.0                                        
+                    else:                                                  
+                        ry = num/den                                       
+                        ry = max(0.0,ry)                                   
+                        phi_y = ( ry * ry + ry) / (ry*ry +1.0)                 
+
+                    # Lax Wendroff Reconstruction (Forward - difference to calculate the slope)
+
+                    du_dx = (U1[var, i+1 , j] - U1[var, i , j])/ dx
+
+                    du_dy = (U1[var, i , j+1] - U1[var, i , j])/ dy
+
+                    UEast[var,i,j]  = U1[var, i , j] + phi_x * du_dx * dx/2.0
+
+                    UWest[var,i,j]  = U1[var, i , j] - phi_x * du_dx * dx/2.0
+
+                    UNorth[var,i,j] = U1[var, i , j] + phi_y * du_dy * dy/2.0
+
+                    USouth[var,i,j] = U1[var, i , j] - phi_y * du_dy * dy/2.0
 
     return UEast, UWest, UNorth, USouth
 
-# Flux functions
+
+###### Flux functions ######
+
 @jit(nopython=True, parallel=False, cache=True)
 def F(U):
     h = U[0]
@@ -175,7 +230,7 @@ def G(U):
     return sol
 
 
-# Flux Calculator
+####### Numerical Flux Calculator #######
 
 @jit(nopython=True, parallel=False, cache=True)
 def calculate_flux(U1, UEast, UWest, UNorth, USouth, T_flux):
@@ -184,15 +239,13 @@ def calculate_flux(U1, UEast, UWest, UNorth, USouth, T_flux):
 
     ### Vertical edge calculation
 
-    leftvalue  = np.zeros_like(U1)
-    rightvalue = np.zeros_like(U1)
-
     leftvalue  = UEast[:,N_g-1:N_g+N_x,N_g:N_g+N_y]
     rightvalue = UWest[:,N_g:N_g+N_x+1,N_g:N_g+N_y]
 
     hL = leftvalue[0]
     uL = leftvalue[1] / hL
     cL = np.sqrt(g*hL)
+
     maxspeedL = np.abs(uL) + cL
 
     hR = rightvalue[0]
@@ -244,7 +297,8 @@ def calculate_flux(U1, UEast, UWest, UNorth, USouth, T_flux):
 
     return T_flux
 
-# Source term
+##### Source term #####
+
 @jit(nopython=True, parallel=False, cache=True)
 def source(U1, S, theta):
 
@@ -254,19 +308,33 @@ def source(U1, S, theta):
 
     return S
 
-# Time integration
+##### Time integration ######
+
 @jit(nopython=True, parallel=False, cache=True)
-def time_integration(U1, U2, T_flux, dt, S):
+def time_integration(U2, T_flux, dt, S, rkstep):
 
     area = dx*dy
+    
+    if(rkstep==1):
+    
+        U2[rkstep,:,N_g:N_g+N_x,N_g:N_g+N_y] = U2[rkstep-1,:,N_g:N_g+N_x,N_g:N_g+N_y] + dt / area * ( T_flux[:,N_g:N_g+N_x,N_g:N_g+N_y] + S[:,N_g:N_g+N_x,N_g:N_g+N_y])   
+    
+    if(rkstep==2):
+    
+        U2[rkstep,:,N_g:N_g+N_x,N_g:N_g+N_y] = (3/4) * U2[rkstep-2,:,N_g:N_g+N_x,N_g:N_g+N_y] + \
+                                               (1/4) * U2[rkstep-1,:,N_g:N_g+N_x,N_g:N_g+N_y] + (1/4) * dt / area * ( T_flux[:,N_g:N_g+N_x,N_g:N_g+N_y] + S[:,N_g:N_g+N_x,N_g:N_g+N_y])   
+    
+    if(rkstep==3):
+        
+        U2[rkstep,:,N_g:N_g+N_x,N_g:N_g+N_y] = (1/3) * U2[rkstep-3,:,N_g:N_g+N_x,N_g:N_g+N_y] + \
+                                               (2/3) * U2[rkstep-1,:,N_g:N_g+N_x,N_g:N_g+N_y] + (2/3) * dt / area * ( T_flux[:,N_g:N_g+N_x,N_g:N_g+N_y] + S[:,N_g:N_g+N_x,N_g:N_g+N_y])   
 
-    U2[:,N_g:N_g+N_x,N_g:N_g+N_y] = U1[:,N_g:N_g+N_x,N_g:N_g+N_y] + dt / area * ( T_flux[:,N_g:N_g+N_x,N_g:N_g+N_y] + S[:,N_g:N_g+N_x,N_g:N_g+N_y])   # Euler's time stepping
+    return U2 
 
-    return U2
+##### Solver ######
 
-# Solver
 @jit(nopython=True, parallel=False, cache=True)
-def solver(t_start,U1,UEast, UWest, UNorth, USouth, T_flux, S, U2, theta, Uanim, tanim ):
+def solver(t_start, U1, U2, UEast, UWest, UNorth, USouth, recons, T_flux, S, theta, Uanim, tanim  ):
 
     cur_itr = 0
     
@@ -288,21 +356,27 @@ def solver(t_start,U1,UEast, UWest, UNorth, USouth, T_flux, S, U2, theta, Uanim,
     
         Uanim[cur_itr] = U1
         tanim[cur_itr] = t
-    
+
         ### main code here ###
+
+        rkstep = 0
+
+        U2[rkstep] = U1.copy()
     
-        U1 = boundary_cond (U1)  # Boundary condition updater
+        for rkstep in range(1, RKsteps+1):  # Runge kutta iteration
+
+            U1 = boundary_cond (U1)         # Boundary condition updater
     
-        UEast, UWest, UNorth, USouth = variable_recon(U1, UEast, UWest, UNorth, USouth)  # Reconstruct variables from centroid to the edges
+            UEast, UWest, UNorth, USouth = variable_recon(U1, UEast, UWest, UNorth, USouth, recons)  # Reconstruct variables from centroid to the edges
     
-        T_flux = calculate_flux(U1, UEast, UWest, UNorth, USouth, T_flux)  # Flux calculation
+            T_flux = calculate_flux(U1, UEast, UWest, UNorth, USouth, T_flux)  # Flux calculation
+
+            S = source(U1, S, theta)        # Source calculation
     
-        S = source(U1, S, theta) # Source calculation
-        
-        U2 = time_integration(U1, U2, T_flux, dt, S) # Time integration
+            U2 = time_integration(U2, T_flux, dt, S, rkstep) # Time integration
     
-        U1[:,N_g:N_g+N_x,N_g:N_g+N_y] = U2[:,N_g:N_g+N_x,N_g:N_g+N_y].copy()
-    
+            U1 = U2[rkstep].copy()
+
         ### main code here ###
     
         if(lastTimestep):
@@ -313,21 +387,13 @@ def solver(t_start,U1,UEast, UWest, UNorth, USouth, T_flux, S, U2, theta, Uanim,
 
     return U1, Uanim, tanim, cur_itr
 
-U1, Uanim, tanim, cur_itr = solver(t_start,U1,UEast, UWest, UNorth, USouth, T_flux, S, U2, theta, Uanim, tanim )
+U1, Uanim, tanim, cur_itr = solver(t_start, U1, U2, UEast, UWest, UNorth, USouth, recons, T_flux, S, theta, Uanim, tanim )
 
-print ("Simulation finished in ", time.time()-run_start_time)
+print ("\nSimulation finished in ", time.time()-run_start_time)
 
-# Visualisation Section
-
-#viz_tools.surface3D(cx[N_g:N_g+N_x], cy[N_g:N_g+N_y], U1[0,N_g:N_g+N_x,N_g:N_g+N_y], str(cur_itr))
-
-#viz_tools.surface_3D_gpu(cx[N_g:N_g+N_x], cy[N_g:N_g+N_y], U1[0,N_g:N_g+N_x,N_g:N_g+N_y], str(cur_itr))
-
-#viz_tools.animation_3D(cx[N_g:N_g+N_x], cy[N_g:N_g+N_y], Uanim[:,0,N_g:N_g+N_x,N_g:N_g+N_y], tanim, cur_itr, t_stop)
+####### Visualisation Section #######
 
 viz_tools.animation_3D_gpu(cx[N_g:N_g+N_x], cy[N_g:N_g+N_y], Uanim[:,0,N_g:N_g+N_x,N_g:N_g+N_y], tanim, cur_itr, t_stop)
-
-#viz_tools.animation_3D_fast(cx[N_g:N_g+N_x], cy[N_g:N_g+N_y], Uanim[:,0,N_g:N_g+N_x,N_g:N_g+N_y], tanim, cur_itr, t_stop)
 
 
 
