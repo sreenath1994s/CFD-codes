@@ -64,7 +64,7 @@ def weno_east(U1, N_g, N_x, N_y):      # U_i+1/2,j (-)
     gamma_2 = 3/5
     gamma_3 = 3/10
 
-    epsilon = 1e-6
+    epsilon = 1e-80
 
     # Alpha weights
 
@@ -111,7 +111,7 @@ def weno_west(U1, N_g, N_x, N_y):      # U_i-1/2,j (+)
     gamma_2 = 3/5
     gamma_3 = 1/10
 
-    epsilon = 1e-6
+    epsilon = 1e-80
 
     # Alpha weights
 
