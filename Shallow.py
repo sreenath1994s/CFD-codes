@@ -6,6 +6,7 @@ import numpy as np
 import time
 import viz_tools
 from numba import jit
+from weno  import *
 
 run_start_time = time.time()                          # Variable used for evaluating program execution time 
 
@@ -20,9 +21,9 @@ g = 9.80665         # Acceleration due to gravity
 
 theta = np.radians(10)  # Angle of tilt of the tank
 
-N_x = 100           # No: of x cells
+N_x = 50            # No: of x cells
 
-N_y = 100           # No: of y cells
+N_y = 50            # No: of y cells
 
 N_g = 4             # No: of ghost cells
 
@@ -36,7 +37,7 @@ t_stop  = 12.0      # Stopping time of simulation, s
 
 RKsteps = 3         # No. of RK steps, min 1, max 3
 
-recons  = 2         # Reconstruction type 1 - 1st , 2 - 2nd ( Lax-Wendroff ), 3 - 5th (WENO)
+recons  = 5         # Reconstruction type 1 - 1st , 2 - 2nd ( Lax-Wendroff ), 5 - 5th (WENO)
 
 ########## Data Structure - Grid Data ##########
 
@@ -70,7 +71,7 @@ tanim  = np.zeros((max_itr))                              #
 
 ######## Intial condition setup ########
 
-U1[0] = 1 * np.exp(-( ( CX - 1 )**2 / (2*0.04) + (CY - 1 )**2 / (2*0.04) ) )  # Initialising the inital values of height as a gaussian.
+U1[0] = 0.5+ 1 * np.exp(-( ( CX - 1 )**2 / (2*0.04) + (CY - 1 )**2 / (2*0.04) ) )  # Initialising the inital values of height as a gaussian.
 
 U1[1] = 0.0  # Initialising the inital values of u - velocity
 
@@ -196,6 +197,15 @@ def variable_recon(U1, UEast, UWest, UNorth, USouth, recons):
 
                     USouth[var,i,j] = U1[var, i , j] - phi_y * du_dy * dy/2.0
 
+    # 3 Sencil Fifth order reconstruction with WENO
+
+    if (recons==5):
+
+        UEast [:, N_g-1:N_x+N_g+1 ,  N_g-1:N_y+N_g+1] = weno_east (U1, N_g, N_x, N_y)
+        UWest [:, N_g-1:N_x+N_g+1 ,  N_g-1:N_y+N_g+1] = weno_west (U1, N_g, N_x, N_y)
+        UNorth[:, N_g-1:N_x+N_g+1 ,  N_g-1:N_y+N_g+1] = weno_north(U1, N_g, N_x, N_y)
+        USouth[:, N_g-1:N_x+N_g+1 ,  N_g-1:N_y+N_g+1] = weno_south(U1, N_g, N_x, N_y)
+
     return UEast, UWest, UNorth, USouth
 
 
@@ -258,7 +268,7 @@ def calculate_flux(U1, UEast, UWest, UNorth, USouth, T_flux):
     FL = F(leftvalue)
     FR = F(rightvalue)
 
-            ### Lax Friedrichs scheme
+            ### Lax Friedrich's flux
 
     flux = 0.5 * (FL + FR) - 0.5 * maxSpeed * (rightvalue - leftvalue)
 
@@ -287,7 +297,7 @@ def calculate_flux(U1, UEast, UWest, UNorth, USouth, T_flux):
     GL = G(leftvalue)
     GR = G(rightvalue)
 
-                ### Lax Friedrichs scheme
+                ### Lax Friedrich's flux
 
     flux = 0.5 * (GL + GR) - 0.5 * maxSpeed * (rightvalue - leftvalue)
     flux *= dx
@@ -304,7 +314,7 @@ def source(U1, S, theta):
 
     S =  np.zeros_like(U1)
 
-    S[1,N_g:N_g+N_x,N_g:N_g+N_y] = g * U1[0,N_g:N_g+N_x,N_g:N_g+N_y] * np.sin(theta) * dx*dy
+    S[1,N_g:N_g+N_x,N_g:N_g+N_y] = g * U1[0,N_g:N_g+N_x,N_g:N_g+N_y] * np.sin(theta) * dx*dy    # Inclination about x axis
 
     return S
 
@@ -391,7 +401,7 @@ U1, Uanim, tanim, cur_itr = solver(t_start, U1, U2, UEast, UWest, UNorth, USouth
 
 print ("\nSimulation finished in ", time.time()-run_start_time)
 
-####### Visualisation Section #######
+####### Visualization Section #######
 
 viz_tools.animation_3D_gpu(cx[N_g:N_g+N_x], cy[N_g:N_g+N_y], Uanim[:,0,N_g:N_g+N_x,N_g:N_g+N_y], tanim, cur_itr, t_stop)
 
